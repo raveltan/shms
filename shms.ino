@@ -7,6 +7,12 @@
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 #include "SPIFFS.h"
+#include "DHT.h"
+
+#define DHTTYPE DHT11
+const int dhtPin = 5;
+// Init DHT module
+DHT dht(dhtPin, DHTTYPE);
 
 // Init an lcd display
 LiquidCrystal_I2C lcd(0x27, 16, 2);
@@ -111,22 +117,25 @@ bool initWiFi() {
   return true;
 }
 
-void writeLine(int line, const char* text) {
+void putLine(int line, const char* text) {
   lcd.setCursor(0, line);
   lcd.printf(text);
 }
+void clearLine(int line) {
+  putLine(line, "                ");
+}
 
-
+void writeLine(int line, const char* text) {
+  clearLine(line);
+  putLine(line, text);
+}
 void setup() {
   // Serial port for debugging purposes
   Serial.begin(115200);
+  dht.begin();
 
   lcd.init();
   lcd.backlight();
-  lcd.setCursor(0, 0);
-  lcd.print("               ");
-  lcd.setCursor(0, 1);
-  lcd.print("               ");
 
   writeLine(0, "Loading Config  ");
   writeLine(1, "SHMS            ");
@@ -140,29 +149,29 @@ void setup() {
   Serial.println(pass);
   Serial.println(ip);
 
+  // Wait for all sensors to be initialized
   delay(4000);
   writeLine(0, "Starting WIFI   ");
   if (initWiFi()) {
-    /* // Route for root / web page */
-    /* server.on("/", HTTP_GET, [](AsyncWebServerRequest* request) { */
-    /*   request->send(SPIFFS, "/index.html", "text/html", false, processor); */
-    /* }); */
-    /* server.serveStatic("/", SPIFFS, "/"); */
-
-    /* // Route to set GPIO state to HIGH */
-    /* server.on("/on", HTTP_GET, [](AsyncWebServerRequest* request) { */
-    /*   digitalWrite(ledPin, HIGH); */
-    /*   request->send(SPIFFS, "/index.html", "text/html", false, processor); */
-    /* }); */
-
-    /* // Route to set GPIO state to LOW */
-    /* server.on("/off", HTTP_GET, [](AsyncWebServerRequest* request) { */
-    /*   digitalWrite(ledPin, LOW); */
-    /*   request->send(SPIFFS, "/index.html", "text/html", false, processor); */
-    /* }); */
-    /* server.begin(); */
     Serial.println("Connection successful");
     writeLine(0, "Connected       ");
+    for (;;) {
+      // TODO: Add the scale monitoring and adjust the temp monitoring delay
+      // TODO: Add another thread for sending data to server and logging
+      int humidity = (int)dht.readHumidity();
+      // Read temperature as Celsius (the default)
+      int temperature = (int)dht.readTemperature();
+
+      // Check if any reads failed and exit early (to try again).
+      if (isnan(humidity) || isnan(temperature)) {
+        Serial.println(F("Failed to read from DHT sensor!"));
+      } else {
+        char result[16];
+        sprintf(result, "%d | %d", humidity, temperature);
+        writeLine(0, result);
+      }
+      delay(2000);
+    }
   } else {
     // Connect to Wi-Fi network with SSID and password
     Serial.println("Setting AP (Access Point)");
