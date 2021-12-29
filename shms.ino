@@ -8,11 +8,18 @@
 #include <LiquidCrystal_I2C.h>
 #include "SPIFFS.h"
 #include "DHT.h"
+#include "RTClib.h"
+#include <Tone32.h>
 
 #define DHTTYPE DHT11
 const int dhtPin = 5;
 // Init DHT module
 DHT dht(dhtPin, DHTTYPE);
+
+const int buzzerPin = 18;
+
+// RTC instance
+RTC_DS3231 rtc;
 
 // Init an lcd display
 LiquidCrystal_I2C lcd(0x27, 16, 2);
@@ -141,6 +148,14 @@ void setup() {
   writeLine(1, "SHMS            ");
   initSPIFFS();
 
+  pinMode(buzzerPin, OUTPUT);
+
+  if (!rtc.begin()) {
+    Serial.println("Couldn't find RTC");
+    writeLine(0, "RTC Error: 404  ");
+    while (1) {}
+  }
+  /* rtc.adjust(DateTime(2021, 12, 29, 10, 57, 0)); */
   // Load values saved in SPIFFS
   ssid = readFile(SPIFFS, ssidPath);
   pass = readFile(SPIFFS, passPath);
@@ -156,7 +171,9 @@ void setup() {
     Serial.println("Connection successful");
     writeLine(0, "Connected       ");
     for (;;) {
-      // TODO: Add the scale monitoring and adjust the temp monitoring delay
+      delay(900);
+      /* tone(buzzerPin, NOTE_C4, 200, 0); */
+      /* noTone(buzzerPin, 0); */
       // TODO: Add another thread for sending data to server and logging
       int humidity = (int)dht.readHumidity();
       // Read temperature as Celsius (the default)
@@ -170,7 +187,11 @@ void setup() {
         sprintf(result, "%d | %d", humidity, temperature);
         writeLine(0, result);
       }
-      delay(2000);
+      delay(900);
+      char timeResult[16];
+      DateTime now = rtc.now();
+      sprintf(timeResult, "%02d:%02d", now.hour(), now.minute());
+      writeLine(1, timeResult);
     }
   } else {
     // Connect to Wi-Fi network with SSID and password
