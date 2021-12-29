@@ -10,6 +10,14 @@
 #include "DHT.h"
 #include "RTClib.h"
 #include <Tone32.h>
+#include "HX711.h"
+
+const int dout = 33;
+const int clk = 32;
+
+HX711 scale(dout, clk);
+
+float calibration_factor = -206650;
 
 #define DHTTYPE DHT11
 const int dhtPin = 5;
@@ -146,6 +154,10 @@ void setup() {
 
   writeLine(0, "Loading Config  ");
   writeLine(1, "SHMS            ");
+
+  scale.set_scale();
+  scale.tare();
+
   initSPIFFS();
 
   pinMode(buzzerPin, OUTPUT);
@@ -171,6 +183,7 @@ void setup() {
     Serial.println("Connection successful");
     writeLine(0, "Connected       ");
     for (;;) {
+      scale.set_scale(calibration_factor);
       delay(900);
       /* tone(buzzerPin, NOTE_C4, 200, 0); */
       /* noTone(buzzerPin, 0); */
@@ -190,7 +203,9 @@ void setup() {
       delay(900);
       char timeResult[16];
       DateTime now = rtc.now();
-      sprintf(timeResult, "%02d:%02d", now.hour(), now.minute());
+      int weight = scale.get_units() * 1000;
+
+      sprintf(timeResult, "%02d:%02d - %003d ml", now.hour(), now.minute(), weight);
       writeLine(1, timeResult);
     }
   } else {
