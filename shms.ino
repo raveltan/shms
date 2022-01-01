@@ -69,12 +69,17 @@ int numOfLoop = 0;
 
 int sendData(char* data, char* endpoint) {
   HTTPClient http;
+  /* WiFiClientSecure WiFiClient; */
   char servername[100];
-  sprintf(servername, "http://192.168.100.11/%s", endpoint);
+  sprintf(servername, "https://shms.buatkode.com/%s", endpoint);
   /* sprintf(servername, "https://reqres.in/api/register"); */
   Serial.println(servername);
   Serial.println(data);
   // Your Domain name with URL path or IP address with path
+  http.setTimeout(4000);
+
+  http.useHTTP10(true);
+  /* http.begin(WiFiClient, servername); */
   http.begin(servername);
 
   // Specify content-type header
@@ -257,7 +262,7 @@ void setup() {
           dhtUpdateCount--;
           Serial.println(dhtUpdateCount);
           if (dhtUpdateCount == 0) {
-            dhtUpdateCount = 5;
+            dhtUpdateCount = 90;
             char data[60];
             sprintf(data, "{\"h\":%d,\"t\":%d}", humidity, temperature);
             int result = sendData(data, "dht");
