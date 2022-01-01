@@ -12,6 +12,8 @@
 #include <Tone32.h>
 #include <string.h>
 #include "HX711.h"
+#include <stdlib.h>
+
 
 const int dout = 33;
 const int clk = 32;
@@ -63,6 +65,7 @@ const long interval = 10000;  // interval to wait for Wi-Fi connection (millisec
 // States traccker variables
 char lastDHT[16] = "";
 char lastTime[16] = "";
+int numOfLoop = 0;
 
 // Initialize SPIFFS
 void initSPIFFS() {
@@ -159,7 +162,7 @@ void setup() {
 
   writeLine(0, "Loading Config  ");
   writeLine(1, "SHMS            ");
-  tone(buzzerPin, NOTE_C4, 400, 0);
+  tone(buzzerPin, NOTE_C4, 200, 0);
   scale.set_scale();
   scale.tare();
 
@@ -178,16 +181,14 @@ void setup() {
   pass = readFile(SPIFFS, passPath);
 
   ip = "192.168.1.200";
-  Serial.println(ssid);
-  Serial.println(pass);
   Serial.println(ip);
 
   // Wait for all sensors to be initialized
-  delay(2000);
+  delay(300);
   scale.set_scale(calibration_factor);
   writeLine(0, "Starting WIFI   ");
   if (initWiFi()) {
-    tone(buzzerPin, NOTE_C4, 400, 0);
+    tone(buzzerPin, NOTE_C6, 300, 0);
     writeLine(0, "Loading Values  ");
     writeLine(1, "Place Bottle Now");
     delay(2000);
@@ -207,34 +208,78 @@ void setup() {
       }
       delay(500);
     }
+    tone(buzzerPin, NOTE_C6, 300, 0);
     Serial.println("Connection successful");
     writeLine(0, "Connected       ");
+    int bottleStatus = 0;
+    int lastWeight = 0;
+    int lastAccurateWeight = 0;
+    int lastCommitState = 0;
+    bool isNoBottle = false;
     for (;;) {
       scale.set_scale(calibration_factor);
-      delay(900);
-      // TODO: Organize data sending between delay
-      // TODO: Implement caching
-      int humidity = (int)dht.readHumidity();
-      // Read temperature as Celsius (the default)
-      int temperature = (int)dht.readTemperature();
-
-      // Check if any reads failed and exit early (to try again).
-      if (isnan(humidity) || isnan(temperature)) {
-        Serial.println(F("Failed to read from DHT sensor!"));
+      if (numOfLoop < 4) {
+        numOfLoop++;
       } else {
-        char result[16];
-        sprintf(result, "%dH | %d'", humidity, temperature);
-        if (strcmp(result, lastDHT) != 0) writeLine(0, result);
-        strncpy(lastDHT, result, 16);
+        numOfLoop = 0;
+        int humidity = (int)dht.readHumidity();
+        // Read temperature as Celsius (the default)
+        int temperature = (int)dht.readTemperature();
+        // Check if any reads failed and exit early (to try again).
+        if (isnan(humidity) || isnan(temperature)) {
+          Serial.println(F("Failed to read from DHT sensor!"));
+        } else {
+          char result[16];
+          sprintf(result, "%d Hu | %d'", humidity, temperature);
+          if (strcmp(result, lastDHT) != 0) writeLine(0, result);
+          strncpy(lastDHT, result, 16);
+        }
       }
-      delay(900);
       DateTime now = rtc.now();
-
       char timeResult[16];
-      // TODO: Move to water monitoring thread?
-      sprintf(timeResult, "%02d:%02d | SHMS", now.hour(), now.minute());
+      // TODO: Add water monitoring logic
+      int dcurrentWeight = lastWeight;
+      if (numOfLoop == 3) {
+        int currentWeight = (scale.get_units() * -1000) - bottleWeight;
+        delay(150);
+        dcurrentWeight = (scale.get_units() * -1000) - bottleWeight;
+        if (abs(currentWeight - dcurrentWeight) < 2) {
+          if ((dcurrentWeight == -1 ? 0 : dcurrentWeight) >= 0) {
+            if (dcurrentWeight - lastCommitState > lastAccurateWeight) {
+              if (dcurrentWeight - lastCommitState - lastAccurateWeight > 2) {
+                tone(buzzerPin, NOTE_D, 300, 0);
+                Serial.printf("filled %d, d: %d, l: %d\n", dcurrentWeight - lastCommitState - lastAccurateWeight, dcurrentWeight, lastAccurateWeight);
+                lastCommitState = dcurrentWeight;
+              }
+            }
+            if (dcurrentWeight < lastCommitState && lastCommitState > 5) {
+              if (lastCommitState - dcurrentWeight > 2) {
+                tone(buzzerPin, NOTE_E, 300, 0);
+                Serial.printf("drink %d, d: %d, l: %d\n", lastCommitState - dcurrentWeight, dcurrentWeight, lastCommitState);
+                lastCommitState = dcurrentWeight;
+              }
+            }
+          }
+          lastAccurateWeight = dcurrentWeight > 0 ? dcurrentWeight : 0;
+        }
+      }
+      if (dcurrentWeight < -2) {
+        if (!isNoBottle) {
+          tone(buzzerPin, NOTE_A, 300, 0);
+          isNoBottle = true;
+        }
+        sprintf(timeResult, "%02d:%02d |NO BOTTLE", now.hour(), now.minute());
+      } else {
+        if (isNoBottle) {
+          tone(buzzerPin, NOTE_B, 300, 0);
+          isNoBottle = false;
+        }
+        sprintf(timeResult, "%02d:%02d | %d ML", now.hour(), now.minute(), dcurrentWeight < 0 ? 0 : dcurrentWeight);
+      }
       if (strcmp(timeResult, lastTime) != 0) writeLine(1, timeResult);
       strncpy(lastTime, timeResult, 16);
+      lastWeight = dcurrentWeight;
+      delay(100);
     }
   } else {
     // Connect to Wi-Fi network with SSID and password
