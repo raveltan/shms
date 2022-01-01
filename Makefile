@@ -14,3 +14,7 @@ mon:
 
 list:
 	arduino-cli board list
+
+s: 
+	go run server/server.go
+
