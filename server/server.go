@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/logger"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -34,7 +33,6 @@ func main() {
 	db.AutoMigrate(&Water{})
 
 	app := fiber.New()
-	app.Use(logger.New())
 	s := server{Db: db}
 	app.Post("/dht", s.dhtPost)
 	app.Post("/water", s.waterPost)
