@@ -10,6 +10,7 @@
 #include "DHT.h"
 #include "RTClib.h"
 #include <Tone32.h>
+#include <string.h>
 #include "HX711.h"
 
 const int dout = 33;
@@ -42,6 +43,7 @@ const char* PARAM_INPUT_2 = "pass";
 String ssid;
 String pass;
 String ip;
+int bottleWeight = 0;
 
 // File paths to save input values permanently
 const char* ssidPath = "/ssid.txt";
@@ -58,6 +60,9 @@ IPAddress subnet(255, 255, 0, 0);
 unsigned long previousMillis = 0;
 const long interval = 10000;  // interval to wait for Wi-Fi connection (milliseconds)
 
+// States traccker variables
+char lastDHT[16] = "";
+char lastTime[16] = "";
 
 // Initialize SPIFFS
 void initSPIFFS() {
@@ -154,7 +159,7 @@ void setup() {
 
   writeLine(0, "Loading Config  ");
   writeLine(1, "SHMS            ");
-
+  tone(buzzerPin, NOTE_C4, 400, 0);
   scale.set_scale();
   scale.tare();
 
@@ -171,23 +176,44 @@ void setup() {
   // Load values saved in SPIFFS
   ssid = readFile(SPIFFS, ssidPath);
   pass = readFile(SPIFFS, passPath);
+
   ip = "192.168.1.200";
   Serial.println(ssid);
   Serial.println(pass);
   Serial.println(ip);
 
   // Wait for all sensors to be initialized
-  delay(4000);
+  delay(2000);
+  scale.set_scale(calibration_factor);
   writeLine(0, "Starting WIFI   ");
   if (initWiFi()) {
+    tone(buzzerPin, NOTE_C4, 400, 0);
+    writeLine(0, "Loading Values  ");
+    writeLine(1, "Place Bottle Now");
+    delay(2000);
+    for (;;) {
+      int weight = scale.get_units() * -1000;
+      char result[16];
+      sprintf(result, "%d grams", weight);
+      writeLine(0, result);
+      if (weight > 20) {
+        delay(1000);
+        int newWeight = scale.get_units() * -1000;
+        if (weight != newWeight) continue;
+        char data[16];
+        sprintf(data, "%d", weight);
+        bottleWeight = weight;
+        break;
+      }
+      delay(500);
+    }
     Serial.println("Connection successful");
     writeLine(0, "Connected       ");
     for (;;) {
       scale.set_scale(calibration_factor);
       delay(900);
-      /* tone(buzzerPin, NOTE_C4, 200, 0); */
-      /* noTone(buzzerPin, 0); */
-      // TODO: Add another thread for sending data to server and logging
+      // TODO: Organize data sending between delay
+      // TODO: Implement caching
       int humidity = (int)dht.readHumidity();
       // Read temperature as Celsius (the default)
       int temperature = (int)dht.readTemperature();
@@ -197,16 +223,18 @@ void setup() {
         Serial.println(F("Failed to read from DHT sensor!"));
       } else {
         char result[16];
-        sprintf(result, "%d | %d", humidity, temperature);
-        writeLine(0, result);
+        sprintf(result, "%dH | %d'", humidity, temperature);
+        if (strcmp(result, lastDHT) != 0) writeLine(0, result);
+        strncpy(lastDHT, result, 16);
       }
       delay(900);
-      char timeResult[16];
       DateTime now = rtc.now();
-      int weight = scale.get_units() * 1000;
 
-      sprintf(timeResult, "%02d:%02d - %003d ml", now.hour(), now.minute(), weight);
-      writeLine(1, timeResult);
+      char timeResult[16];
+      // TODO: Move to water monitoring thread?
+      sprintf(timeResult, "%02d:%02d | SHMS", now.hour(), now.minute());
+      if (strcmp(timeResult, lastTime) != 0) writeLine(1, timeResult);
+      strncpy(lastTime, timeResult, 16);
     }
   } else {
     // Connect to Wi-Fi network with SSID and password
@@ -252,8 +280,10 @@ void setup() {
           //Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
         }
       }
-      request->send(200, "text/plain", "Complete, restarting device" + ip);
-      delay(3000);
+      request->send(200, "text/plain", "Complete, please check your screen");
+      writeLine(0, "Restarting...   ");
+      tone(buzzerPin, NOTE_C4, 400, 0);
+      delay(500);
       ESP.restart();
     });
     server.begin();
