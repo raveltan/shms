@@ -1,7 +1,5 @@
 // Author: Ravel Tan <ravel@buatkode.com>
 // Copyright 2021 Buatkode
-
-#include <WiFi.h>
 #include <ESPAsyncWebServer.h>
 #include <AsyncTCP.h>
 #include <Wire.h>
@@ -13,7 +11,8 @@
 #include <string.h>
 #include "HX711.h"
 #include <stdlib.h>
-
+#include <WiFi.h>
+#include <HTTPClient.h>
 
 const int dout = 33;
 const int clk = 32;
@@ -67,6 +66,28 @@ char lastDHT[16] = "";
 char lastTime[16] = "";
 int numOfLoop = 0;
 
+
+int sendData(char* data, char* endpoint) {
+  HTTPClient http;
+  char servername[100];
+  sprintf(servername, "http://192.168.100.11/%s", endpoint);
+  /* sprintf(servername, "https://reqres.in/api/register"); */
+  Serial.println(servername);
+  Serial.println(data);
+  // Your Domain name with URL path or IP address with path
+  http.begin(servername);
+
+  // Specify content-type header
+  http.addHeader("Content-Type", "application/json");
+
+  // Send HTTP POST request
+  int result = http.POST(data);
+  /* int result = http.GET(); */
+  Serial.println(http.getString());
+  http.end();
+  return result;
+}
+
 // Initialize SPIFFS
 void initSPIFFS() {
   if (!SPIFFS.begin(true)) {
@@ -116,12 +137,12 @@ bool initWiFi() {
     return false;
   }
 
-  WiFi.mode(WIFI_STA);
+  /* WiFi.mode(WIFI_STA); */
 
-  if (!WiFi.config(localIP, gateway, subnet)) {
-    Serial.println("STA Failed to configure");
-    return false;
-  }
+  /* if (!WiFi.config(localIP, gateway, subnet)) { */
+  /*   Serial.println("STA Failed to configure"); */
+  /*   return false; */
+  /* } */
   WiFi.begin(ssid.c_str(), pass.c_str());
   Serial.println("Connecting to WiFi...");
 
@@ -184,7 +205,6 @@ void setup() {
   Serial.println(ip);
 
   // Wait for all sensors to be initialized
-  delay(300);
   scale.set_scale(calibration_factor);
   writeLine(0, "Starting WIFI   ");
   if (initWiFi()) {
@@ -216,6 +236,7 @@ void setup() {
     int lastAccurateWeight = 0;
     int lastCommitState = 0;
     bool isNoBottle = false;
+    int dhtUpdateCount = 2;
     for (;;) {
       scale.set_scale(calibration_factor);
       if (numOfLoop < 4) {
@@ -233,11 +254,21 @@ void setup() {
           sprintf(result, "%d Hu | %d'", humidity, temperature);
           if (strcmp(result, lastDHT) != 0) writeLine(0, result);
           strncpy(lastDHT, result, 16);
+          dhtUpdateCount--;
+          Serial.println(dhtUpdateCount);
+          if (dhtUpdateCount == 0) {
+            dhtUpdateCount = 5;
+            char data[60];
+            sprintf(data, "{\"h\":%d,\"t\":%d}", humidity, temperature);
+            int result = sendData(data, "dht");
+            Serial.println("result:");
+            Serial.println(result);
+            Serial.println("");
+          }
         }
       }
       DateTime now = rtc.now();
       char timeResult[16];
-      // TODO: Add water monitoring logic
       int dcurrentWeight = lastWeight;
       if (numOfLoop == 3) {
         int currentWeight = (scale.get_units() * -1000) - bottleWeight;
@@ -249,6 +280,7 @@ void setup() {
               if (dcurrentWeight - lastCommitState - lastAccurateWeight > 2) {
                 tone(buzzerPin, NOTE_D, 300, 0);
                 Serial.printf("filled %d, d: %d, l: %d\n", dcurrentWeight - lastCommitState - lastAccurateWeight, dcurrentWeight, lastAccurateWeight);
+                // TODO: send post
                 lastCommitState = dcurrentWeight;
               }
             }
@@ -256,6 +288,7 @@ void setup() {
               if (lastCommitState - dcurrentWeight > 2) {
                 tone(buzzerPin, NOTE_E, 300, 0);
                 Serial.printf("drink %d, d: %d, l: %d\n", lastCommitState - dcurrentWeight, dcurrentWeight, lastCommitState);
+                // TODO: send post
                 lastCommitState = dcurrentWeight;
               }
             }
@@ -334,6 +367,5 @@ void setup() {
     server.begin();
   }
 }
-
 void loop() {
 }
