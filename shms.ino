@@ -242,7 +242,7 @@ void setup() {
     int lastAccurateWeight = 0;
     int lastCommitState = 0;
     bool isNoBottle = false;
-    int dhtUpdateCount = 20;
+    int dhtUpdateCount = 40;
     int storage_array[100];
     bool turn = true;
     Vector<int> vector;
@@ -263,36 +263,33 @@ void setup() {
           char result[16];
           sprintf(result, "%d Hu | %d'", humidity, temperature);
           if (dhtUpdateCount == 0) {
-            dhtUpdateCount = 20;
+            dhtUpdateCount = 300;
             tone(buzzerPin, NOTE_G, 300, 0);
             writeLine(0, "Transmitting ...");
             turn = !turn;
             // Water monitor
-            if (turn) {
-              if (vector.size() > 0) {
-                int d = vector.front();
-                vector.remove(0);
-                Serial.println(d);
-                char data[60];
-                sprintf(data, "{\"a\":%d}", d);
-                int r = sendData(data, "water");
-                Serial.println("result:");
-                Serial.println(r);
-                Serial.println("");
-              } else {
-                Serial.println("nothing");
-              }
-              Serial.println("");
-              writeLine(0, result);
-            } else {
+            if (vector.size() > 0) {
+              int d = vector.front();
+              vector.remove(0);
+              Serial.println(d);
               char data[60];
-              sprintf(data, "{\"h\":%d,\"t\":%d}", humidity, temperature);
-              int r = sendData(data, "dht");
+              sprintf(data, "{\"a\":%d}", d);
+              int r = sendData(data, "water");
               Serial.println("result:");
               Serial.println(r);
               Serial.println("");
-              writeLine(0, result);
+            } else {
+              Serial.println("nothing");
             }
+            Serial.println("");
+            char data[60];
+            sprintf(data, "{\"h\":%d,\"t\":%d}", humidity, temperature);
+            int r = sendData(data, "dht");
+            Serial.println("result:");
+            Serial.println(r);
+            Serial.println("");
+            writeLine(0, result);
+            tone(buzzerPin, NOTE_G, 300, 0);
             // Dht monitor
           }
           if (strcmp(result, lastDHT) != 0) writeLine(0, result);
