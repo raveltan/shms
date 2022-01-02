@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
+#include <Vector.h>
 
 const int dout = 33;
 const int clk = 32;
@@ -76,7 +77,7 @@ int sendData(char* data, char* endpoint) {
   Serial.println(servername);
   Serial.println(data);
   // Your Domain name with URL path or IP address with path
-  http.setTimeout(4000);
+  http.setTimeout(2500);
 
   http.useHTTP10(true);
   /* http.begin(WiFiClient, servername); */
@@ -241,7 +242,11 @@ void setup() {
     int lastAccurateWeight = 0;
     int lastCommitState = 0;
     bool isNoBottle = false;
-    int dhtUpdateCount = 2;
+    int dhtUpdateCount = 20;
+    int storage_array[100];
+    bool turn = true;
+    Vector<int> vector;
+    vector.setStorage(storage_array);
     for (;;) {
       scale.set_scale(calibration_factor);
       if (numOfLoop < 4) {
@@ -257,19 +262,43 @@ void setup() {
         } else {
           char result[16];
           sprintf(result, "%d Hu | %d'", humidity, temperature);
+          if (dhtUpdateCount == 0) {
+            dhtUpdateCount = 20;
+            tone(buzzerPin, NOTE_G, 300, 0);
+            writeLine(0, "Transmitting ...");
+            turn = !turn;
+            // Water monitor
+            if (turn) {
+              if (vector.size() > 0) {
+                int d = vector.front();
+                vector.remove(0);
+                Serial.println(d);
+                char data[60];
+                sprintf(data, "{\"a\":%d}", d);
+                int r = sendData(data, "water");
+                Serial.println("result:");
+                Serial.println(r);
+                Serial.println("");
+              } else {
+                Serial.println("nothing");
+              }
+              Serial.println("");
+              writeLine(0, result);
+            } else {
+              char data[60];
+              sprintf(data, "{\"h\":%d,\"t\":%d}", humidity, temperature);
+              int r = sendData(data, "dht");
+              Serial.println("result:");
+              Serial.println(r);
+              Serial.println("");
+              writeLine(0, result);
+            }
+            // Dht monitor
+          }
           if (strcmp(result, lastDHT) != 0) writeLine(0, result);
           strncpy(lastDHT, result, 16);
           dhtUpdateCount--;
           Serial.println(dhtUpdateCount);
-          if (dhtUpdateCount == 0) {
-            dhtUpdateCount = 90;
-            char data[60];
-            sprintf(data, "{\"h\":%d,\"t\":%d}", humidity, temperature);
-            int result = sendData(data, "dht");
-            Serial.println("result:");
-            Serial.println(result);
-            Serial.println("");
-          }
         }
       }
       DateTime now = rtc.now();
@@ -285,7 +314,7 @@ void setup() {
               if (dcurrentWeight - lastCommitState - lastAccurateWeight > 2) {
                 tone(buzzerPin, NOTE_D, 300, 0);
                 Serial.printf("filled %d, d: %d, l: %d\n", dcurrentWeight - lastCommitState - lastAccurateWeight, dcurrentWeight, lastAccurateWeight);
-                // TODO: send post
+                vector.push_back(dcurrentWeight - lastCommitState - lastAccurateWeight);
                 lastCommitState = dcurrentWeight;
               }
             }
@@ -293,7 +322,7 @@ void setup() {
               if (lastCommitState - dcurrentWeight > 2) {
                 tone(buzzerPin, NOTE_E, 300, 0);
                 Serial.printf("drink %d, d: %d, l: %d\n", lastCommitState - dcurrentWeight, dcurrentWeight, lastCommitState);
-                // TODO: send post
+                vector.push_back(-1 * (lastCommitState - dcurrentWeight));
                 lastCommitState = dcurrentWeight;
               }
             }

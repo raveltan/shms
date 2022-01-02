@@ -87,6 +87,6 @@ func (s *server) getWater(c *fiber.Ctx) error {
 	month := c.Query("month")
 	day := c.Query("day")
 	date := fmt.Sprintf("%v-%v-%v", year, month, day)
-	s.Db.Where("data(created_at) = date(?)", date).Find(&datas)
+	s.Db.Where("date(created_at) = date(?)", date).Find(&datas)
 	return c.JSON(datas)
 }
