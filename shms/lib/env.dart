@@ -67,6 +67,8 @@ class _EnvPageState extends State<EnvPage> {
                     SizedBox(
                       width: double.infinity,
                       child: Card(
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20)),
                         child: Container(
                           padding: const EdgeInsets.all(32),
                           child: Column(
@@ -99,12 +101,18 @@ class _EnvPageState extends State<EnvPage> {
                     ),
                     Expanded(
                         child: ListView.separated(
-                            itemBuilder: (c, i) => ListTile(
-                                  title: Text(
-                                      "${data.data[i].h} Humid & ${data.data[i].t} Celcius"),
-                                  subtitle: Text(data.data[i].date),
-                                  trailing: const Icon(Icons.cloud),
+                            itemBuilder: (c, i) {
+                              var date = DateTime.parse(data.data[i].date);
+                              return ListTile(
+                                title: Text(
+                                  "${data.data[i].h}% Humid & ${data.data[i].t} Celcius",
+                                  style: const TextStyle(fontSize: 18),
                                 ),
+                                trailing: Text(
+                                    "${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}"),
+                                leading: const Icon(Icons.cloud),
+                              );
+                            },
                             separatorBuilder: (c, i) => const Divider(),
                             itemCount: data.data.length))
                   ],

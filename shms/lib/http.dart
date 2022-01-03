@@ -30,7 +30,7 @@ Future<WaterModelWrapper> getWaterData(
       for (var element in (response.data as List<dynamic>)) {
         var result = WaterModel.fromJson(element);
         data.add(result);
-        total += result.a;
+        if (result.a < 0) total += result.a.abs();
       }
       return WaterModelWrapper(total, data);
     } else {

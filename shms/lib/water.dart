@@ -3,7 +3,7 @@ import 'package:shms/http.dart';
 
 class WaterPage extends StatefulWidget {
   final DateTime date;
-  WaterPage({Key? key, required this.date}) : super(key: key);
+  const WaterPage({Key? key, required this.date}) : super(key: key);
 
   @override
   State<StatefulWidget> createState() => _WaterPageState();
@@ -67,6 +67,8 @@ class _WaterPageState extends State<WaterPage> {
                     SizedBox(
                       width: double.infinity,
                       child: Card(
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20)),
                         child: Container(
                           padding: const EdgeInsets.all(32),
                           child: Column(
@@ -99,13 +101,22 @@ class _WaterPageState extends State<WaterPage> {
                     ),
                     Expanded(
                         child: ListView.separated(
-                            itemBuilder: (c, i) => ListTile(
-                                  title: Text(data.data[i].a > 0
-                                      ? "Drink ${data.data[i].a}"
-                                      : "Filled ${data.data[i].a.abs()}"),
-                                  subtitle: Text(data.data[i].date),
-                                  trailing: const Icon(Icons.local_drink),
+                            itemBuilder: (c, i) {
+                              var date = DateTime.parse(data.data[i].date);
+                              return ListTile(
+                                title: Text(
+                                  data.data[i].a > 0
+                                      ? "Filled ${data.data[i].a}"
+                                      : "Drink ${data.data[i].a.abs()}",
+                                  style: const TextStyle(fontSize: 18),
                                 ),
+                                trailing: Text(
+                                    "${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}"),
+                                leading: Icon(data.data[i].a < 0
+                                    ? Icons.local_drink
+                                    : Icons.no_drinks),
+                              );
+                            },
                             separatorBuilder: (c, i) => const Divider(),
                             itemCount: data.data.length))
                   ],
